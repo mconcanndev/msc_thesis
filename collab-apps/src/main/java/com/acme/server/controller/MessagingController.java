@@ -427,11 +427,17 @@ public class MessagingController {
 
 
     /**
-     * Modified version of REST Compliant 'Create / Modify' request on new ChatRoom resource from the representation provided in the JSON body & stores in the Database
-     * Accessible via a POST on /chatrooms/{id}
+     * Modified version of the initially REST Compliant POST on /chatrooms.
+     * The URI is slightly modified so both services can co-exist on the Messaging Controller endpoint for ease of performance
+     * analysis. In a real world only one of the models would be adopted so the endpoint will be modified to say 'v2'
      *
-     * NOTE: The system will set the chatRoomID & lastModified fields that get set in the JSON Body of the HTTP response
-     * so any values provided in those fields are ignored.
+     * Supports any 'Create / Modify' request on the ChatRoom resource from the representation provided in the JSON body
+     * as well as any child resources associated with the ChatRoom, namingly ChatMessage & User Resources
+     *
+     * Accessible via a POST on /v2/chatrooms/{id}
+     *
+     * NOTE: The system will still set the immutable data across ChatRoom, ChatMessage & User resources so any of these values
+     * will continue to be ignored in the JSON body.
      *
      * The JSON object returned includes a set of Action Links that represent the next set of allowable actions in
      * order to conform to HATEOAS
@@ -444,17 +450,17 @@ public class MessagingController {
      *
      * @return      <code> ChatRoom </code>
      */
- /*   @RequestMapping(value = "/chatrooms_v2", method = RequestMethod.POST)
-    public ChatRoom postNewChatRoom(InputStream data) {
-        log.info("Entering POST /chatrooms_v2");
+    @RequestMapping(value = "/v2/chatrooms", method = RequestMethod.POST)
+    public ChatRoom postNewChatRoomv2(InputStream data) {
+        log.info("Entering POST /v2/chatrooms");
 
         //Extract incoming json to build a ChatRoom Object from
         String json = StringUtils.InputStringToString(data);
         log.info("POST data: " + json);
 
-        //Call out to the MessagingService Class to build & store the new ChatRoom in the database after applying all
-        //relevant business constraints on what the consumer is allowed to manipulate
-        ChatRoom chatRoom = messagingService.createChatRoomFromJSON(json);
+        //Call out to the MessagingService Class to build & store the new ChatRoom & child resources in the database
+        // after applying all relevant business constraints on what the consumer is allowed to manipulate
+        ChatRoom chatRoom = messagingService.createModifiedChatRoomFromJSON(json);
 
         //Construct the next set of allowable actions to send back to the API Consumer to guarantee they can navigate the API
         //via a set of Hypertext links as outlined in Fielding's REST constraints
@@ -473,7 +479,7 @@ public class MessagingController {
 
         return chatRoom;
     }
-*/
+
 
 
 

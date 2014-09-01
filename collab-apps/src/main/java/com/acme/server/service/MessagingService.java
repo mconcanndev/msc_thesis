@@ -451,5 +451,139 @@ public class MessagingService {
     }
 
 
+    /**
+     * Creates or Modifies the chatroom from the input JSON & any child resources.
+     * This explicitly violates REST constraints.
+     *
+
+     * @param       json Input JSON with detail of what needs to be created or modified.
+     * @return      <code>List</code>
+     */
+    public ChatRoom createModifiedChatRoomFromJSON(String json ){
+        log.info("Entering createChatRoomFromJSON: " + json);
+
+        //Create empty ChatRoom object in memory to return the JSON representation of the new object to the Controller
+        ChatRoom chatRoom = new ChatRoom();
+        Gson gsonFromJSON = new Gson();
+
+        //Populate a ChatRoom object directly using data from the JSON representation
+        chatRoom = gsonFromJSON.fromJson(json, chatRoom.getClass());
+        log.info("ChatRoom object constructed from JSON representation");
+
+        //Step 1 CHECK IF THIS IS A MODIFICATION OR CREATION OF THE CHATROOM RESOURCE BY LOOKING UP THE DATABASE
+        ChatRoomDAO existingChatRoomDAO = databaseManager.retrieveChatRoomDAO(chatRoom.getChatRoomID());
+        String existingChatRoomID = existingChatRoomDAO.getChatRoomID();
+
+        //Create a new String to make the value accessible by the ChatMessages being create also if valid in the code below.
+        //If this is a modification request the value won't change but if it's a new ChatRoom need to set the ID in order to be
+        //able to use it to create ChatMessages & reconstruct the ChatRoom
+        String modifiedChatRoomID = existingChatRoomID;
+
+        if( existingChatRoomID != null){
+            log.info("This is a modify ChatRoom request");
+
+            //copy the logic for ChatRoom modification - update the ChatRoomTopic
+
+            //Overwrite the current topic in the ChatRoomDAO found with the one from the JSON body
+            existingChatRoomDAO.setTopic(chatRoom.getTopic());
+            log.info("Updated Topic for existingChatRoomID: " + existingChatRoomID + " to" + chatRoom.getTopic() );
+
+            //Update the data in the KeyValue Store using the same value
+            //Will have the same key as one that already exists so modified
+            databaseManager.createChatRoomFromDAO(existingChatRoomDAO);
+        }
+        else{
+            log.info("This is a standard ChatRoom create request");
+
+
+            //Create a ChatRoomDAO to translate to something that can be persisted in a KEY / VALUE data store
+            ChatRoomDAO newChatRoomDAO = new ChatRoomDAO(chatRoom);
+
+            //DAO Object ready to persist to Database
+            log.info("Persisting ChatRoomDAO");
+            newChatRoomDAO.persist();
+
+            //set the ID of the newly created chatRoom if appropriate so any new ChatMessages include it.
+            modifiedChatRoomID = newChatRoomDAO.getChatRoomID();
+        }
+
+        //Step 2 CHECK IF ANY OF THE CHATMESSAGES IN THE CHATROOM JSON REPRESENTATION ALREADY EXIST & EITHER REQUIRE
+        //MODIFICATION OR CREATION (PROBABLY WANT TO REVERT THE ORDER SO THE FINAL RECONSTRUCTION OF THE CHATROOM IS
+        //PAINLESS
+        List<ChatMessage> chatMessages = chatRoom.getChatMessages();
+        List<ChatMessageDAO> modifiedChatMessageDAOs = new ArrayList<ChatMessageDAO>();
+
+        for(int i=0;i<chatMessages.size();i++){
+            ChatMessage nextChatMessage = chatMessages.get(i);
+            String chatMessageIDJSON = nextChatMessage.getChatMessageID();
+
+            //Now determine if this is a Message that already exists (update with the readreceipt in JSON body)
+            //or if it doesn't exist & the request is to create the new Message
+            ChatMessageDAO chatMessageDAO = databaseManager.retrieveChatMessageDAO(chatMessageIDJSON);
+            if(chatMessageDAO.getChatMessageID() != null){
+                log.info("This is a modify ChatMessage request");
+
+              //TODO - Make sure that the ChatMessgaeID is at least one associated with this Chatroom if it already exists
+              //  if(chatMessageDAO.getChatMessageID().contains(chatRoomID)){
+
+
+                boolean validModificationRequest = chatMessageDAO.getChatMessageID().indexOf(existingChatRoomID) > 0;
+                if (validModificationRequest) {
+                    log.info("Valid Message Modification Request ");
+                }
+
+                int t=1;
+                if(t==1){
+                    log.info("Valid ChatMessage - modifying read receipt");
+                    chatMessageDAO.setReadReceipt(nextChatMessage.getReadReceipt());
+
+                    //Update the data in the KeyValue Store using the same value
+                    //Will have the same key as one that already exists
+                    databaseManager.createChatMessageFromDAO(chatMessageDAO);
+                    log.info("Read Receipt Updated for ChatMessage ID: " + chatMessageDAO.getChatMessageID());
+
+                    //Re-read the data from the key / value store after the update operation so the ChatMessage object built to send back
+                    ChatMessageDAO modifiedChatMessageDAO = databaseManager.retrieveChatMessageDAO(chatMessageDAO.getChatMessageID());
+                    log.info("Re Read ChatMessage ID updated, read receipt is: " + chatMessageDAO.getReadReceipt());
+
+                    //Add to a list of ChatMessageDAO's created of modified for the ChatRoomID
+                    modifiedChatMessageDAOs.add(modifiedChatMessageDAO);
+
+                }
+                else{
+                    log.info("This ChatMessage is not associated with the ChatRoom ID - no authorisation to modify it");
+                }
+
+            }
+            else{
+                //The modifiedChatRoomID here is either the existing one that was modified above or a new one created above.
+                log.info("This is a create new ChatMessage request for ChatRoom ID: " + modifiedChatRoomID);
+
+                //Set the ChatRoomID to the modified version incase there was a new one created
+                nextChatMessage.setChatRoomID(modifiedChatRoomID);
+
+                //Create a new ChatMessage using the JSON input but overriding the chatRoomID already processed
+                //Create a ChatRoomDAO to translate to something that can be persisted in a KEY / VALUE data store
+                ChatMessageDAO newChatMessageDAO = new ChatMessageDAO(nextChatMessage);
+
+                //DAO Object ready to persist to Database
+                log.info("Persisting ChatRoomDAO");
+                newChatMessageDAO.persist();
+
+               //Retrieve the newly created ChatMessage from the DB & add it to the list of ChatMessage DAO's
+                ChatMessageDAO modifiedChatMessageDAO = databaseManager.retrieveChatMessageDAO(newChatMessageDAO.getChatMessageID());
+                log.info("Re Read New ChatMessage ID created: " + modifiedChatMessageDAO.getChatMessageID());
+
+                //Add to a list of ChatMessageDAO's created of modified for the ChatRoomID
+                modifiedChatMessageDAOs.add(modifiedChatMessageDAO);
+            }
+        }
+
+       //Reconstruct a representation of the  ChatRoom object from the data stored & retrieval of the other resources
+       //referenced in the ChatRoom DAO.
+        ChatRoom chatRoomToReturn = retrieveChatRoom(modifiedChatRoomID);
+        return chatRoomToReturn;
+    }
+
 
 }
