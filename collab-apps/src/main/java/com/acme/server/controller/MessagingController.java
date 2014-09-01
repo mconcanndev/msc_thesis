@@ -432,7 +432,7 @@ public class MessagingController {
      * analysis. In a real world only one of the models would be adopted so the endpoint will be modified to say 'v2'
      *
      * Supports any 'Create / Modify' request on the ChatRoom resource from the representation provided in the JSON body
-     * as well as any child resources associated with the ChatRoom, namingly ChatMessage & User Resources
+     * as well as the ChatMessage sub resources associated with the ChatRoom, namingly ChatMessage
      *
      * Accessible via a POST on /v2/chatrooms/{id}
      *
